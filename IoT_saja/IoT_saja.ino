@@ -5,6 +5,9 @@
 #include <Blynk.h>
 #define BLYNK_PRINT Serial
 #define BUTTON_PIN2 V2
+// #define HOURS V3
+// #define MINUTES V4
+// #define SECONDS V5
 
 #include <WiFi.h>
 #include <WiFiClient.h>
@@ -15,32 +18,36 @@
 #include <Wire.h>
 #include <Adafruit_MLX90614.h>
 
-#define KIPAS_PIN 17
-#define EXOS_PIN 5
+#define EXOS_PIN 4
 #define HEATER_PIN 16
-#define BUTTON_PIN 18
+#define BUTTON_PIN 5
+#define RST_PIN 17
 
 LiquidCrystal_I2C lcd(0x27, 20, 4);  // Alamat I2C untuk modul 20x4
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 int isFirstPress = 0;
 int buttonState = 0;
+
 bool lastButtonState = HIGH;
 bool currentButtonState;
+bool refresh = false;
 bool isDeviceOn = false;
+
 char ssid[] = "Galaxy A727885";
 char pass[] = "ginnamon";
 unsigned long startTime = 0;
+
 BLYNK_WRITE(BUTTON_PIN2){
   buttonState = param.asInt();
 }
 
 void setup() {
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
-  pinMode(KIPAS_PIN, OUTPUT);
   pinMode(EXOS_PIN, OUTPUT);
   pinMode(HEATER_PIN, OUTPUT);
-  pinMode(BUTTON_PIN, INPUT_PULLUP); // Using INPUT_PULLUP to enable internal pull-up resistor
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(RST_PIN, INPUT_PULLUP); // Using INPUT_PULLUP to enable internal pull-up resistor
   lcd.init();
   Serial.begin(115200);
   mlx.begin();
@@ -50,7 +57,7 @@ void setup() {
   lcd.setCursor(7, 0);     // Set kursor ke baris 1, kolom 1
   lcd.print("SoLveD");
   
-  digitalWrite(KIPAS_PIN, HIGH);
+  
   digitalWrite(EXOS_PIN, HIGH);
   digitalWrite(HEATER_PIN, HIGH);
   
@@ -60,12 +67,24 @@ void setup() {
     Serial.println("Connecting to WiFi");
   }
   startTime = millis();
+
 }
 
 void loop() {
   float ambient = mlx.readAmbientTempC();
   float object = mlx.readObjectTempC();
+  int hours,minutes,seconds;
   
+  if (digitalRead(RST_PIN) == LOW) {
+    refresh = true;
+  }
+  if (refresh) {
+      Serial.println("System refreshed");
+      delay(1000);
+      ESP.restart();
+      refresh = false;
+  }
+
   Serial.print("Ambient = ");
   Serial.print(ambient);
   Serial.print("*C\tObject = ");
@@ -92,11 +111,9 @@ void loop() {
   }
 
   if (isDeviceOn) {
-    digitalWrite(KIPAS_PIN, LOW);
     digitalWrite(EXOS_PIN, LOW);
     digitalWrite(HEATER_PIN, LOW);
   } else {
-    digitalWrite(KIPAS_PIN, HIGH);
     digitalWrite(EXOS_PIN, HIGH);
     digitalWrite(HEATER_PIN, HIGH);
     }
@@ -105,9 +122,9 @@ void loop() {
     unsigned long currentTime = millis();
     unsigned long elapsedTime = currentTime - startTime;
 
-    int hours = elapsedTime / 3600000;
-    int minutes = (elapsedTime % 3600000) / 60000;
-    int seconds = ((elapsedTime % 3600000) % 60000) / 1000;
+    hours = elapsedTime / 3600000;
+    minutes = (elapsedTime % 3600000) / 60000;
+    seconds = ((elapsedTime % 3600000) % 60000) / 1000;
     lcd.clear();
     lcd.setCursor(7, 0);     // Set kursor ke baris 1, kolom 1
     lcd.print("SoLveD");
@@ -143,7 +160,10 @@ void loop() {
   lastButtonState = currentButtonState;
 
   Blynk.virtualWrite(V0, object);
-  Blynk.virtualWrite(V1, ambient);
+  // Blynk.virtualWrite(V1, ambient);
+  Blynk.virtualWrite(V3, hours);
+  Blynk.virtualWrite(V4, minutes);
+  Blynk.virtualWrite(V5, seconds);
   // Blynk.virtualWrite(V2, isFirstPressBlynk);
 
   delay(1000);
